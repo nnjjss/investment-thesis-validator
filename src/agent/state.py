@@ -81,6 +81,16 @@ class Verdict(BaseModel):
     cost_usd: float = 0.0
 
 
+class ToolCallPlan(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    need_stock_data: bool
+    need_news: bool
+    need_filings: bool
+    news_query: str | None = None
+    rationale: str = ""
+
+
 class NodeTrace(BaseModel):
     node: str
     started_at: datetime
@@ -101,6 +111,7 @@ class ValidatorState(BaseModel):
     ticker: str
     as_of_date: date
     claims: list[ThesisClaim] = Field(default_factory=list)
+    tool_plan: ToolCallPlan | None = None
     evidence: list[Evidence] = Field(default_factory=list)
     verdict: Verdict | None = None
     traces: list[NodeTrace] = Field(default_factory=list)
