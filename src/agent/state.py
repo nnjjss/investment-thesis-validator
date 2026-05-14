@@ -91,6 +91,14 @@ class ToolCallPlan(BaseModel):
     rationale: str = ""
 
 
+class ContradictionResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    supporting_evidence_ids: list[str] = Field(default_factory=list)
+    refuting_evidence_ids: list[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
 class NodeTrace(BaseModel):
     node: str
     started_at: datetime
@@ -113,6 +121,7 @@ class ValidatorState(BaseModel):
     claims: list[ThesisClaim] = Field(default_factory=list)
     tool_plan: ToolCallPlan | None = None
     evidence: list[Evidence] = Field(default_factory=list)
+    contradiction: ContradictionResult | None = None
     verdict: Verdict | None = None
     traces: list[NodeTrace] = Field(default_factory=list)
 
