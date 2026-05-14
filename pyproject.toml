@@ -17,6 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "dspy>=3.2.1",
     "mypy>=2.1.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
