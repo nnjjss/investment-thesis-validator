@@ -14,7 +14,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.agent.state import ValidatorState, Verdict
-from src.api.schemas import JobStateResponse, JobStatus
+from src.api.schemas import GuardrailReport, JobStateResponse, JobStatus
+from src.guardrails.citation_binding import unsupported_claims
+from src.guardrails.numeric_check import numeric_findings
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,7 @@ class JobState:
     finished_at: datetime | None = None
     cost_usd: float = 0.0
     verdict: Verdict | None = None
+    guardrails: GuardrailReport | None = None
     error: str | None = None
 
     def to_response(self) -> JobStateResponse:
@@ -39,6 +42,7 @@ class JobState:
             finished_at=self.finished_at,
             cost_usd=self.cost_usd,
             verdict=self.verdict,
+            guardrails=self.guardrails,
             error=self.error,
         )
 
@@ -75,6 +79,7 @@ async def run_job(
     graph: Any,
     metrics: Any = None,
     metrics_model_label: str = "agent",
+    cost_cap_usd: float = 0.50,
 ) -> None:
     await job_store.update(
         job_id, status=JobStatus.RUNNING, started_at=datetime.now(UTC)
@@ -85,12 +90,28 @@ async def run_job(
             raw if isinstance(raw, ValidatorState) else ValidatorState.model_validate(raw)
         )
         cost = sum(t.cost_usd for t in state.traces)
+
+        unsupported = unsupported_claims(state)
+        suspicious = numeric_findings(state)
+        guardrails = GuardrailReport(
+            unsupported_claim_ids=[u.claim_id for u in unsupported],
+            suspicious_numbers=[f.span for f in suspicious],
+            cost_cap_exceeded=cost > cost_cap_usd,
+            cost_cap_usd=cost_cap_usd,
+        )
+        if guardrails.cost_cap_exceeded:
+            logger.warning(
+                "cost_cap_exceeded",
+                extra={"job_id": job_id, "cost_usd": cost, "cap": cost_cap_usd},
+            )
+
         await job_store.update(
             job_id,
             status=JobStatus.COMPLETED,
             finished_at=datetime.now(UTC),
             verdict=state.verdict,
             cost_usd=cost,
+            guardrails=guardrails,
         )
         if metrics is not None:
             metrics.emit_completed(state, model_for_costs=metrics_model_label)

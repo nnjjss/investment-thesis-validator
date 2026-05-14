@@ -79,6 +79,9 @@ async def test_submit_then_poll_until_completed() -> None:
         assert final_status == "completed"
         result = poll.json()
         assert result["verdict"]["stance"] == "SUPPORTED"
+        # Guardrails always populated on completion
+        assert result["guardrails"] is not None
+        assert result["guardrails"]["cost_cap_exceeded"] is False
         graph.ainvoke.assert_awaited_once()
 
 

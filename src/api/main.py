@@ -56,6 +56,7 @@ def _build_state(settings: Any) -> dict[str, Any]:
         "job_store": JobStore(),
         "metrics": ValidatorMetrics(),
         "metrics_model_label": settings.validator_model,
+        "cost_cap_usd": settings.max_cost_usd,
     }
 
 
