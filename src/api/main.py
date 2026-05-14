@@ -15,10 +15,12 @@ from typing import Any
 
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
+from prometheus_client import make_asgi_app
 
 from src.agent.graph import GraphModels, build_graph
 from src.agent.llm import LLMClient
 from src.api.jobs import JobStore
+from src.api.metrics import ValidatorMetrics
 from src.api.routes import health, validate
 from src.config import get_settings
 from src.ingestion.fmp import FMPClient
@@ -52,6 +54,8 @@ def _build_state(settings: Any) -> dict[str, Any]:
         "sec": sec,
         "graph": graph,
         "job_store": JobStore(),
+        "metrics": ValidatorMetrics(),
+        "metrics_model_label": settings.validator_model,
     }
 
 
@@ -77,6 +81,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(validate.router)
+    app.mount("/metrics", make_asgi_app())
     return app
 
 

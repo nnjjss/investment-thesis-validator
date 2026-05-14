@@ -50,6 +50,8 @@ async def submit_validation(
         job_id=job.job_id,
         initial_state=initial,
         graph=graph,
+        metrics=getattr(request.app.state, "metrics", None),
+        metrics_model_label=getattr(request.app.state, "metrics_model_label", "agent"),
     )
     return ValidateAcceptedResponse(job_id=job.job_id, status=job.status)
 

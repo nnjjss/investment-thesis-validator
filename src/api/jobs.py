@@ -73,6 +73,8 @@ async def run_job(
     *,
     initial_state: ValidatorState,
     graph: Any,
+    metrics: Any = None,
+    metrics_model_label: str = "agent",
 ) -> None:
     await job_store.update(
         job_id, status=JobStatus.RUNNING, started_at=datetime.now(UTC)
@@ -90,6 +92,8 @@ async def run_job(
             verdict=state.verdict,
             cost_usd=cost,
         )
+        if metrics is not None:
+            metrics.emit_completed(state, model_for_costs=metrics_model_label)
     except Exception as exc:  # noqa: BLE001 — surface to client via error field
         logger.exception("job_failed", extra={"job_id": job_id})
         await job_store.update(
@@ -98,3 +102,5 @@ async def run_job(
             finished_at=datetime.now(UTC),
             error=str(exc),
         )
+        if metrics is not None:
+            metrics.emit_failed()
