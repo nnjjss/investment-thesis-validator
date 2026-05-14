@@ -1,0 +1,111 @@
+{
+  "uid": "itv-overview",
+  "title": "ITV — Validator Overview",
+  "tags": ["itv", "agent"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": []},
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Per-node latency (p50)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (node, le) (rate(itv_node_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Per-node latency (p95)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (node, le) (rate(itv_node_latency_seconds_bucket[5m])))",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "s"}}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Validations / min by stance",
+      "gridPos": {"x": 0, "y": 8, "w": 8, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (stance) (rate(itv_validation_total[5m])) * 60",
+          "legendFormat": "{{stance}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Tokens / hour by model + kind",
+      "gridPos": {"x": 8, "y": 8, "w": 16, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (model, kind) (rate(itv_tokens_total[5m])) * 3600",
+          "legendFormat": "{{model}} / {{kind}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Cost per hour ($)",
+      "gridPos": {"x": 0, "y": 14, "w": 12, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(itv_cost_usd_total[5m])) * 3600",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "currencyUSD"}}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Validation error rate",
+      "gridPos": {"x": 12, "y": 14, "w": 12, "h": 6},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(itv_validation_total{status=\"failed\"}[5m])) / clamp_min(sum(rate(itv_validation_total[5m])), 0.001)",
+          "legendFormat": "error_rate"
+        }
+      ],
+      "fieldConfig": {"defaults": {"unit": "percentunit"}}
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Top tools by failure",
+      "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "topk(10, sum by (tool, outcome) (rate(itv_tool_call_total{outcome!=\"ok\"}[15m])))",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}
