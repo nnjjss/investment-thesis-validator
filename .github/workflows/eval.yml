@@ -1,0 +1,92 @@
+name: eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: "Sample size (0 = full dataset)"
+        required: false
+        default: "5"
+      dataset:
+        description: "Dataset path"
+        required: false
+        default: "eval/datasets/golden_v1_seed.jsonl"
+  schedule:
+    - cron: "17 9 * * *"  # daily 09:17 UTC (overnight US)
+  pull_request:
+    types: [labeled]
+
+jobs:
+  run-eval:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'eval'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync deps
+        run: uv sync --all-extras --dev
+
+      - name: Run eval
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+        run: |
+          uv run python -m eval.cli run \
+            --dataset "${{ inputs.dataset || 'eval/datasets/golden_v1_seed.jsonl' }}" \
+            --sample "${{ inputs.sample || '5' }}" \
+            --concurrency 2 \
+            --label "${{ github.run_id }}"
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-run-${{ github.run_id }}
+          path: eval/runs/
+
+      - name: Comment on PR with summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const root = 'eval/runs';
+            const runs = fs.readdirSync(root)
+              .map(d => ({ name: d, mtime: fs.statSync(path.join(root, d)).mtimeMs }))
+              .sort((a, b) => b.mtime - a.mtime);
+            if (runs.length === 0) {
+              core.setFailed('no eval run found');
+              return;
+            }
+            const summary = JSON.parse(fs.readFileSync(path.join(root, runs[0].name, 'summary.json')));
+            const a = summary.aggregate;
+            const body = [
+              '### eval results',
+              `dataset: \`${summary.dataset}\``,
+              '',
+              '| metric | value |',
+              '|---|---|',
+              `| final_answer_accuracy | ${a.final_answer_accuracy.toFixed(3)} |`,
+              `| tool_call_accuracy | ${a.tool_call_accuracy.toFixed(3)} |`,
+              `| retrieval_precision | ${a.retrieval_precision.toFixed(3)} |`,
+              `| hallucination_rate | ${a.hallucination_rate.toFixed(3)} |`,
+              `| cost_usd_total | $${a.cost_usd_total.toFixed(4)} |`,
+              `| n_succeeded | ${summary.n_items_succeeded} |`,
+              `| n_failed | ${summary.n_items_failed} |`,
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

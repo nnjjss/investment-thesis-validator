@@ -5,4 +5,5 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [lint.per-file-ignores]
-"tests/**/*.py" = ["B011"]
+"tests/**/*.py" = ["B011", "E501"]
+"eval/report.py" = ["E501"]
