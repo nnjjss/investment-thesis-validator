@@ -139,9 +139,22 @@ async def synthesize(
             )
         )
 
+    # Anthropic occasionally drops a required field even with strict tool_use;
+    # default to UNCERTAIN/LOW rather than raising — honest fallback.
+    raw_stance = raw.get("stance") or "UNCERTAIN"
+    raw_conf = raw.get("confidence") or "LOW"
+    try:
+        stance_val = Stance(raw_stance)
+    except ValueError:
+        stance_val = Stance.UNCERTAIN
+    try:
+        conf_val = Confidence(raw_conf)
+    except ValueError:
+        conf_val = Confidence.LOW
+
     verdict = Verdict(
-        stance=Stance(raw["stance"]),
-        confidence=Confidence(raw["confidence"]),
+        stance=stance_val,
+        confidence=conf_val,
         summary=str(raw.get("summary", "")),
         claim_verdicts=claim_verdicts,
         evidence_used=[eid for eid in raw.get("evidence_used", []) if eid in valid_ids],

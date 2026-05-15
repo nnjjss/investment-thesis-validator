@@ -30,6 +30,21 @@ async def fetch_news(
             ]
         }
 
+    if not news.is_configured:
+        finished = datetime.now(UTC)
+        return {
+            "traces": [
+                *state.traces,
+                NodeTrace(
+                    node="fetch_news",
+                    started_at=started,
+                    finished_at=finished,
+                    status="skipped",
+                    error="news_api_key not configured",
+                ),
+            ]
+        }
+
     query = (plan.news_query or state.ticker).strip()
     new_evidence = await news.search(query, as_of_date=state.as_of_date)
     finished = datetime.now(UTC)

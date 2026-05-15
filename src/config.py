@@ -14,7 +14,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = Field(..., alias="ANTHROPIC_API_KEY")
     fmp_api_key: str = Field(..., alias="FMP_API_KEY")
-    news_api_key: str = Field(..., alias="NEWS_API_KEY")
+    # NEWS_API_KEY is optional — when empty, fetch_news skips with status=skipped.
+    news_api_key: str = Field("", alias="NEWS_API_KEY")
 
     max_cost_usd: float = Field(0.50, alias="MAX_COST_USD")
     validator_model: str = Field("claude-opus-4-7", alias="MODEL_VALIDATOR")

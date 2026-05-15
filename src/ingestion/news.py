@@ -23,8 +23,12 @@ class NewsClient:
         self._api_key = api_key
         self._http = AsyncHTTPClient(
             base_url=base_url,
-            headers={"X-Api-Key": api_key},
+            headers={"X-Api-Key": api_key} if api_key else {},
         )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self._api_key)
 
     async def aclose(self) -> None:
         await self._http.aclose()

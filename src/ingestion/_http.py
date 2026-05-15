@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from types import TracebackType
 from typing import Any, Self
 
@@ -16,6 +17,15 @@ logger = structlog.get_logger(__name__)
 
 DEFAULT_TIMEOUT_S = 30.0
 RETRY_ATTEMPTS = 3
+
+_REDACTED_QUERY_PARAMS: tuple[str, ...] = ("apikey", "api_key", "token", "key")
+_REDACT_RE = re.compile(
+    r"(?i)\b(" + "|".join(_REDACTED_QUERY_PARAMS) + r")=[^&\s\"']+"
+)
+
+
+def _redact(message: str) -> str:
+    return _REDACT_RE.sub(r"\1=<redacted>", message)
 
 
 class RateLimitedError(Exception):
@@ -106,6 +116,14 @@ class AsyncHTTPClient:
             log.warning("upstream_transient_error")
             raise TransientUpstreamError(f"{response.status_code} from {path}")
 
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # httpx embeds the full URL (with apikey) in the message; redact.
+            redacted = _redact(str(exc))
+            log.warning("upstream_status_error", message=redacted)
+            raise httpx.HTTPStatusError(
+                redacted, request=exc.request, response=exc.response
+            ) from None
         log.debug("upstream_ok")
         return response.json()
