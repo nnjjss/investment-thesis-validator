@@ -1,26 +1,27 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
+
+import pytest
 
 from eval.schema import GoldenItem
 from src.agent.state import Stance
 
+DATASETS_DIR = Path(__file__).resolve().parent.parent / "eval" / "datasets"
 
-def test_seed_dataset_loads_and_meets_diversity() -> None:
-    seed_path = (
-        Path(__file__).resolve().parent.parent
-        / "eval"
-        / "datasets"
-        / "golden_v1_seed.jsonl"
-    )
-    items = [
+
+def _load(path: Path) -> list[GoldenItem]:
+    return [
         GoldenItem.model_validate_json(line)
-        for line in seed_path.read_text(encoding="utf-8").splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert len(items) >= 20
 
-    # All five categories represented.
+
+def _validate_dataset(items: list[GoldenItem], *, min_size: int) -> None:
+    assert len(items) >= min_size, f"expected at least {min_size} items, got {len(items)}"
+
     categories = {item.category for item in items}
     assert categories == {
         "fundamentals",
@@ -30,17 +31,36 @@ def test_seed_dataset_loads_and_meets_diversity() -> None:
         "multi_claim",
     }
 
-    # Anti-sycophancy: ≥30% should be REFUTED or UNCERTAIN.
-    non_supported = [
-        i for i in items if i.expected_stance in (Stance.REFUTED, Stance.UNCERTAIN)
-    ]
-    assert len(non_supported) / len(items) >= 0.30
+    non_supported = sum(
+        1 for i in items if i.expected_stance in (Stance.REFUTED, Stance.UNCERTAIN)
+    )
+    assert non_supported / len(items) >= 0.30, (
+        f"anti-sycophancy bar — REFUTED+UNCERTAIN must be ≥30%, "
+        f"got {100 * non_supported / len(items):.0f}%"
+    )
 
-    # No duplicate IDs.
     ids = [i.id for i in items]
-    assert len(ids) == len(set(ids))
+    assert len(ids) == len(set(ids)), "duplicate ids present"
 
-    # Every item has a non-empty thesis and ticker.
     for item in items:
-        assert item.thesis.strip()
-        assert item.ticker.strip()
+        assert item.thesis.strip(), f"empty thesis on {item.id}"
+        assert item.ticker.strip(), f"empty ticker on {item.id}"
+
+
+def test_seed_dataset_loads_and_meets_diversity() -> None:
+    items = _load(DATASETS_DIR / "golden_v1_seed.jsonl")
+    _validate_dataset(items, min_size=20)
+
+
+@pytest.mark.skipif(
+    not (DATASETS_DIR / "golden_v1_candidates.jsonl").exists(),
+    reason="candidates not generated — run `uv run python -m eval.generate_seed`",
+)
+def test_candidates_dataset_balanced() -> None:
+    items = _load(DATASETS_DIR / "golden_v1_candidates.jsonl")
+    _validate_dataset(items, min_size=100)
+
+    by_category = Counter(item.category for item in items)
+    # Generator targets 20 per category; tolerate small variance.
+    for category, count in by_category.items():
+        assert count >= 18, f"category {category} underfilled: {count}"
