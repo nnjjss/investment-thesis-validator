@@ -64,3 +64,31 @@ def test_candidates_dataset_balanced() -> None:
     # Generator targets 20 per category; tolerate small variance.
     for category, count in by_category.items():
         assert count >= 18, f"category {category} underfilled: {count}"
+
+
+@pytest.mark.skipif(
+    not (DATASETS_DIR / "golden_v1.jsonl").exists(),
+    reason="golden_v1.jsonl not promoted yet",
+)
+def test_golden_v1_promoted_dataset() -> None:
+    items = _load(DATASETS_DIR / "golden_v1.jsonl")
+    _validate_dataset(items, min_size=100)
+
+    # Every evidence key must use a prefix the runtime can actually emit.
+    valid_prefixes = (
+        "fmp.profile.",
+        "fmp.quote.",
+        "fmp.income_statement.",
+        "fmp.ratios.",
+        "sec.10-K.",
+        "sec.10-Q.",
+        "sec.8-K.",
+        "sec.10K.",
+        "sec.10Q.",
+        "news.",
+    )
+    for item in items:
+        for key in item.expected_evidence_keys:
+            assert any(key.startswith(p) for p in valid_prefixes), (
+                f"item {item.id}: invalid evidence key prefix: {key}"
+            )
