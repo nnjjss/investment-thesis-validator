@@ -3,6 +3,10 @@
 Outputs:
 - ``eval/runs/<ts>/results.jsonl`` — one row per (item, item-level scores).
 - ``eval/runs/<ts>/per_node.jsonl`` — one row per (item, node trace).
+- ``eval/runs/<ts>/verdicts.jsonl`` — one row per (item, full verdict) for
+  failure-mode diagnosis (what stance the agent picked, summary, claim
+  breakdown). Kept separate from results.jsonl so the metrics file stays
+  small + tabular.
 - ``eval/runs/<ts>/summary.json`` — aggregate scores + run metadata.
 
 Designed to be importable: ``run_eval(items, graph)`` returns the same data
@@ -32,13 +36,43 @@ class EvalResult:
     item_scores: list[ItemScores]
     aggregate: AggregateScores
     per_node_rows: list[dict[str, Any]]
+    verdict_rows: list[dict[str, Any]]
     failures: list[dict[str, Any]]
+
+
+def _verdict_row(item: GoldenItem, state: ValidatorState) -> dict[str, Any]:
+    verdict = state.verdict
+    return {
+        "item_id": item.id,
+        "category": item.category,
+        "expected_stance": item.expected_stance.value,
+        "predicted_stance": verdict.stance.value if verdict else None,
+        "predicted_confidence": verdict.confidence.value if verdict else None,
+        "summary": verdict.summary if verdict else "",
+        "claim_verdicts": [
+            {
+                "claim_id": cv.claim_id,
+                "stance": cv.stance.value,
+                "rationale": cv.rationale,
+                "supporting_evidence_ids": list(cv.supporting_evidence_ids),
+                "refuting_evidence_ids": list(cv.refuting_evidence_ids),
+            }
+            for cv in (verdict.claim_verdicts if verdict else [])
+        ],
+        "evidence_used": list(verdict.evidence_used) if verdict else [],
+        "evidence_keys_fetched": [ev.key for ev in state.evidence],
+    }
 
 
 async def _run_one(
     item: GoldenItem,
     graph: Any,
-) -> tuple[ItemScores | None, list[dict[str, Any]], dict[str, Any] | None]:
+) -> tuple[
+    ItemScores | None,
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+    dict[str, Any] | None,
+]:
     initial = ValidatorState(
         thesis=item.thesis,
         ticker=item.ticker,
@@ -49,7 +83,7 @@ async def _run_one(
         state = raw if isinstance(raw, ValidatorState) else ValidatorState.model_validate(raw)
     except Exception as exc:  # noqa: BLE001 — eval surface, must not propagate
         logger.warning("eval_item_failed", extra={"item_id": item.id, "error": str(exc)})
-        return None, [], {"item_id": item.id, "error": str(exc), "stage": "ainvoke"}
+        return None, [], None, {"item_id": item.id, "error": str(exc), "stage": "ainvoke"}
 
     scores = score_item(item, state)
     per_node = [
@@ -67,7 +101,8 @@ async def _run_one(
         }
         for trace in state.traces
     ]
-    return scores, per_node, None
+    verdict = _verdict_row(item, state)
+    return scores, per_node, verdict, None
 
 
 async def run_eval(
@@ -81,7 +116,12 @@ async def run_eval(
 
     async def _bounded(
         item: GoldenItem,
-    ) -> tuple[ItemScores | None, list[dict[str, Any]], dict[str, Any] | None]:
+    ) -> tuple[
+        ItemScores | None,
+        list[dict[str, Any]],
+        dict[str, Any] | None,
+        dict[str, Any] | None,
+    ]:
         async with semaphore:
             return await _run_one(item, graph)
 
@@ -89,11 +129,14 @@ async def run_eval(
 
     item_scores: list[ItemScores] = []
     per_node_rows: list[dict[str, Any]] = []
+    verdict_rows: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
-    for scores, rows, fail in results:
+    for scores, rows, verdict, fail in results:
         if scores is not None:
             item_scores.append(scores)
         per_node_rows.extend(rows)
+        if verdict is not None:
+            verdict_rows.append(verdict)
         if fail is not None:
             failures.append(fail)
 
@@ -101,6 +144,7 @@ async def run_eval(
         item_scores=item_scores,
         aggregate=aggregate(item_scores),
         per_node_rows=per_node_rows,
+        verdict_rows=verdict_rows,
         failures=failures,
     )
 
@@ -125,6 +169,10 @@ def persist_run(
     with (run_dir / "per_node.jsonl").open("w", encoding="utf-8") as fh:
         for row in result.per_node_rows:
             fh.write(json.dumps(row) + "\n")
+
+    with (run_dir / "verdicts.jsonl").open("w", encoding="utf-8") as fh:
+        for row in result.verdict_rows:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
     summary = {
         "ts": ts,
