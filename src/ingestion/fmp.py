@@ -97,6 +97,29 @@ class FMPClient:
             for row in rows
         ]
 
+    async def cash_flow(
+        self,
+        symbol: str,
+        *,
+        as_of_date: date,
+        period: str = "quarter",
+        limit: int = 4,
+    ) -> list[Evidence]:
+        data = await self._get(
+            "/cash-flow-statement",
+            {"symbol": symbol, "period": period, "limit": limit},
+        )
+        rows = _filter_by_date(data, as_of_date)
+        return [
+            _evidence(
+                key=f"fmp.cash_flow.{symbol}.{row.get('date', 'unknown')}",
+                value=row,
+                raw={},
+                as_of_date=as_of_date,
+            )
+            for row in rows
+        ]
+
     async def _get(self, path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         merged = {**params, "apikey": self._api_key}
         result = await self._http.get_json(path, params=merged)

@@ -51,6 +51,35 @@ async def test_income_statement_filters_by_as_of_date() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_cash_flow_happy_path() -> None:
+    rows = [
+        {
+            "date": "2025-12-31",
+            "operatingCashFlow": 30000,
+            "capitalExpenditure": -5000,
+            "freeCashFlow": 25000,
+        },
+        {
+            "date": "2025-09-30",
+            "operatingCashFlow": 28000,
+            "capitalExpenditure": -4500,
+            "freeCashFlow": 23500,
+        },
+    ]
+    respx.get(f"{FMP_BASE_URL}/cash-flow-statement").mock(
+        return_value=httpx.Response(200, json=rows)
+    )
+
+    async with FMPClient(api_key="test") as client:
+        evs = await client.cash_flow("AAPL", as_of_date=date(2026, 1, 1))
+
+    assert len(evs) == 2
+    assert evs[0].key == "fmp.cash_flow.AAPL.2025-12-31"
+    assert evs[0].value["freeCashFlow"] == 25000
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_quote_empty_payload() -> None:
     respx.get(f"{FMP_BASE_URL}/quote").mock(return_value=httpx.Response(200, json=[]))
 

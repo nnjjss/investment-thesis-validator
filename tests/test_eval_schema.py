@@ -80,6 +80,7 @@ def test_golden_v1_promoted_dataset() -> None:
         "fmp.quote.",
         "fmp.income_statement.",
         "fmp.ratios.",
+        "fmp.cash_flow.",
         "sec.10-K.",
         "sec.10-Q.",
         "sec.8-K.",

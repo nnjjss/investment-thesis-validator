@@ -64,6 +64,13 @@ async def fetch_stock(
     )
     new_evidence.extend(
         await _safe(
+            "cash_flow",
+            fmp.cash_flow(state.ticker, as_of_date=state.as_of_date, limit=4),
+            errors,
+        )
+    )
+    new_evidence.extend(
+        await _safe(
             "ratios",
             fmp.ratios(state.ticker, as_of_date=state.as_of_date, limit=4),
             errors,

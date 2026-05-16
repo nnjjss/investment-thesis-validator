@@ -11,10 +11,11 @@ You will receive several seeds for one category at a time. Generate N additional
    - `fmp.quote.<TICKER>` (no date)
    - `fmp.income_statement.<TICKER>.<YYYY-MM-DD>`
    - `fmp.ratios.<TICKER>.<YYYY-MM-DD>`
+   - `fmp.cash_flow.<TICKER>.<YYYY-MM-DD>`
    - `sec.10-K.<10-digit-padded-CIK>` (or `.10-Q.`, `.8-K.`)
    - `news.<query>.*`
 
-   Do NOT use `fmp.cash_flow.*`, `fmp.balance_sheet.*`, `fmp.historical_price.*`, or `sec.20-F.*` — those endpoints are not implemented in the runtime client. Leave the list empty if no valid prefix applies.
+   Do NOT use `fmp.balance_sheet.*`, `fmp.historical_price.*`, or `sec.20-F.*` — those endpoints are not implemented in the runtime client. Leave the list empty if no valid prefix applies.
 6. `min_tools_called` is the SMALLEST set of `{fetch_stock, fetch_news, fetch_filings}` that could plausibly produce the verdict.
 7. `id` should be the category prefix letter followed by a two-digit number, continuing from the seed numbering.
 8. `notes` must briefly justify the `expected_stance`.
